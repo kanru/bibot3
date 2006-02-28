@@ -1,0 +1,8 @@
+[assembly: System.Reflection.AssemblyTitle("Bibot IRC Bot Library")]
+[assembly: System.Reflection.AssemblyDescription("Bibot IRC Bot Library")]
+[assembly: System.Reflection.AssemblyCompany("kanru.info")]
+[assembly: System.Reflection.AssemblyProduct("Bibot IRC Bot")]
+[assembly: System.Reflection.AssemblyCopyright("Copyright @ Kanru Chen 2006")]
+
+[assembly: System.Reflection.AssemblyVersion("0.0.1")]
+[assembly: System.Runtime.InteropServices.ComVisible (false)]

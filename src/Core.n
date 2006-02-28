@@ -1,0 +1,206 @@
+using System;
+using System.Reflection;
+using System.Threading;
+using Nemerle.Collections;
+using Nemerle.Text;
+using Meebey.SmartIrc4net;
+
+namespace Bibot {
+
+	public class Core {
+
+		static mutable _instance : this;
+		
+		connections : Queue [IrcClient];
+		mutable plugins : list [string * IPlugin];
+		nick : string;
+
+		this ()
+		{
+			plugins = [];
+			connections = Queue ();
+			nick = "bibot3";
+		}
+
+		public static Instance : this
+		{
+			get {
+				when (_instance == null)
+					_instance = Core ();
+				_instance;
+			}
+		}
+
+		public Connect (site : string, port : int) : void
+		{
+			def con = IrcClient ();
+			con.SendDelay = 200;
+			con.ActiveChannelSyncing = true;
+
+			con.OnRawMessage += fun (_, e: IrcEventArgs) {
+				Console.WriteLine ("{0}: {1}", nick, e.Data.RawMessage);
+			}
+			con.OnRegistered += EventHandler (OnRegistered);
+			con.OnChannelMessage += IrcEventHandler (OnPublic);
+			con.OnQueryMessage += IrcEventHandler (OnPrivate);
+			con.OnError += ErrorEventHandler (OnError);
+			con.OnDisconnected += EventHandler (OnDisconnected);
+			con.Encoding = System.Text.UTF8Encoding ();
+			con.Connect (array [site], port);
+			con.Login ("bibot3", "Bibot Version 3");
+			connections.Push (con);
+			Thread (ThreadStart (con.Listen)).Start ();
+		}
+
+		public Die () : void
+		{
+			foreach ((_, p) in plugins) {
+				p.Unplug ();
+			}
+			foreach (con in connections) {
+				con.Disconnect ();
+			}
+		}
+
+		public Join (server : string, channel : string) : void
+		{
+			foreach (con in connections) {
+				when (con.Address == server) {
+					con.RfcJoin (channel);
+					Console.WriteLine ("Join: {0}/{1}", con.Address, channel);
+				}
+			}
+		}
+
+		public Part (server : string, channel : string) : void
+		{
+			foreach (con in connections) {
+				when (con.Address == server)
+					con.RfcPart (channel);
+			}
+		}
+
+		public PerformAction (action : string, params arg : array [string]) : void
+		{
+			match (action) {
+				| "action" =>
+					when (arg.Length < 3)
+						throw ArgumentException ($"Not enough parameters, need 3 given $(arg.Length)");
+					foreach (con in connections) {
+						when (con.Address == arg[0])
+							con.SendMessage (SendType.Action, arg[1], arg[2]);
+					}
+				| "msg" =>
+					when (arg.Length < 3)
+						throw ArgumentException ($"Not enough parameters, need 3 given $(arg.Length)");
+					foreach (con in connections) {
+						when (con.Address == arg[0])
+							con.SendMessage (SendType.Message, arg[1], arg[2]);
+					}
+				| _ as a =>
+					Console.WriteLine ("Command {0} is not implemented.", a);
+			}
+		}
+
+		public LoadPlugin (file : string, plugin : string) : void
+		{
+			def loaded (a : string * IPlugin) {
+				if (a[0] == plugin)
+					true;
+				else
+					false;
+			}
+			unless (plugins.Exists (loaded)) {
+				try {
+					def p = Assembly.LoadFrom (file).CreateInstance (plugin) :> IPlugin;
+					p.Setup ();
+					//plugins = (plugin, p) :: plugins.Rev ();
+					//plugins = plugins.RevAppend ([(plugin, p)]);
+					plugins = plugins.RevAppend ([(plugin, p)]);
+				} catch {
+					| e => Console.WriteLine ("Can't load plugin {0}/{1}\n{2}", file, plugin, e);
+				}
+			}
+		}
+
+		public UnloadPlugin (plugin : string) : void
+		{
+			def loaded (a : string * IPlugin) {
+				if (a[0] == plugin)
+					true;
+				else
+					false;
+			}
+			when (plugins.Exists (loaded)) {
+				plugins = plugins.Filter (fun (p) {
+						if (p[0] != plugin)
+						true;
+						else {
+						p[1].Unplug ();
+						false;
+						}
+						});
+			}
+		}
+
+		OnRegistered (s : object, _ : EventArgs) : void
+		{
+			def addr = (s:>IrcClient).Address;
+			Console.WriteLine ("{0} registered.", addr);
+			foreach ((_, p) in plugins) {
+				p.OnRegistered (addr);
+			}
+		}
+
+		OnPublic (sender : object, e : IrcEventArgs) : void
+		{
+			def msg = Message ();
+			msg.Server = e.Data.Irc.Address;
+			msg.Source = e.Data.Channel;
+			msg.Nick = e.Data.Nick;
+			//msg.Content = e.Data.Message;
+			regexp match (e.Data.Message) {
+				| "^(?<n>.*)[ \t]*[:,][ \t]*(?<m>.*)" =>
+					msg.Addressing = n;
+					msg.Content = m;
+				| _ =>
+					msg.Addressing = "";
+					msg.Content = e.Data.Message;
+			}
+			foreach ((_, p) in plugins) {
+				p.OnPublic (msg);
+			}
+		}
+
+		OnPrivate (sender : object, e : IrcEventArgs) : void
+		{
+			def msg = Message ();
+			msg.Server = e.Data.Irc.Address;
+			msg.Source = e.Data.Nick;
+			msg.Nick = e.Data.Nick;
+			msg.Content = e.Data.Message;
+			foreach ((_, p) in plugins) {
+				p.OnPrivate (msg);
+			}
+		}
+
+		OnError (sender : object, e : ErrorEventArgs) : void
+		{
+			Console.WriteLine ("An error of type " + e.Data.ReplyCode.ToString () + " due to " + e.ErrorMessage + " has occurred.");
+		}
+
+		OnDisconnected (s : object, _ : EventArgs) : void
+		{
+			Console.WriteLine ("{0} disconnected.", (s:>IrcClient).Address);
+		}
+	}
+
+	public class Message {
+		public mutable Server : string;
+		public mutable Source : string;
+		public mutable Nick : string;
+		public mutable Content : string;
+		public mutable Addressing : string;
+		public mutable Stop : bool = false;
+	}
+}

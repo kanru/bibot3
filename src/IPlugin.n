@@ -1,0 +1,9 @@
+namespace Bibot {
+	public interface IPlugin {
+		Setup () : void;
+		OnPublic (_ : Message) : void;
+		OnPrivate (_ : Message) : void;
+		OnRegistered (_ : string) : void;
+		Unplug () : void;
+	}
+}

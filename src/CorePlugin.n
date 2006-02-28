@@ -1,0 +1,45 @@
+using Bibot;
+using Nemerle.Text;
+namespace Bibot.Plugins {
+	public class CorePlugin : IPlugin {
+		public Setup () : void
+		{
+		}
+		public OnRegistered (addr : string) : void
+		{
+			when (addr == "irc.freenode.net") {
+				def con = Bibot.Core.Instance;
+				con.Join (addr, "#bibot");
+				con.PerformAction ("msg", addr, "NickServ", "identify ji3cp4");
+			}
+		}
+		public OnPublic (_ : Message) : void
+		{
+		}
+		public OnPrivate (m : Message) : void
+		{
+			def con = Bibot.Core.Instance;
+			regexp match (m.Content) {
+				| "(?<cmd>.*) +(?<arg>.*)" =>
+					match (cmd) {
+						| "load" =>
+							def file = "Plugins/"+arg+".dll";
+							def pluginClass = "Bibot.Plugins."+arg;
+							con.LoadPlugin (file, pluginClass);
+							con.PerformAction ("msg", m.Server, m.Source, $"$(arg) loaded");
+							m.Stop = true;
+						| "unload" =>
+							def pluginClass = "Bibot.Plugins."+arg;
+							con.UnloadPlugin (pluginClass);
+							con.PerformAction ("msg", m.Server, m.Source, $"$(arg) unloaded");
+							m.Stop = true;
+						| _ =>
+							con.PerformAction ("msg", m.Server, m.Source, $"Unsupport $(cmd)");
+					}
+			}
+		}
+		public Unplug () : void
+		{
+		}
+	}
+}

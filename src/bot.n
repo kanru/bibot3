@@ -1,0 +1,13 @@
+using Bibot;
+
+public module Bot {
+	public Main () : void
+	{
+		def bot = Bibot.Core.Instance;
+		
+		bot.Connect ("irc.freenode.net", 6667);
+		bot.LoadPlugin ("Plugins/CorePlugin.dll", "Bibot.Plugins.CorePlugin");
+		_ = System.Console.ReadLine ();
+		bot.Die ();
+	}
+}
