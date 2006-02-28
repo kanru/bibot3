@@ -1,0 +1,129 @@
+using System;
+using System.IO;
+using System.Net;
+using System.Xml.XPath;
+using System.Threading;
+
+namespace Bibot {
+	[Record]
+	public class News {
+		public Title : string;
+		public Description : string;
+		public Link : string;
+	}
+	[Record]
+	public class NewsEventArgs : EventArgs {
+		public Name : string;
+		public Headlines : array [News];
+	}
+	public delegate NewsEventHandler (o : object, e : NewsEventArgs) : void;
+	public abstract class NewsAggregator {
+		public Name : string;
+		public Url : string;
+		mutable time : TimeSpan;
+		public this (name : string, url : string)
+		{
+			this.Name = name;
+			this.Url = url;
+			this.Period = "00.00:30:00.00";
+			Update ();
+		}
+		public event NewsEvent : NewsEventHandler;
+		protected abstract ParseNews (file : string) : list [News];
+		protected abstract CollectNews () : void;
+		Loop () : void
+		{
+			while (true) {
+				Update ();
+				CollectNews ();
+				Thread.Sleep (time);
+			}
+		}
+		public Period : string {
+			get { time.ToString () }
+			set { time = TimeSpan.Parse (value) }
+		}
+		public Update () : void
+		{
+			def w = WebClient ();
+			when (File.Exists (this.FileNew)) {
+				File.Delete (this.FileOld);
+				File.Move (this.FileNew, this.FileOld);
+			}
+			w.DownloadFile (this.Url, this.FileNew);
+			unless (File.Exists (this.FileOld)) {
+				File.Copy (this.FileNew, this.FileOld);
+			}
+		}
+		public virtual Start () : void
+		{
+			Thread (ThreadStart (Loop)).Start ();
+		}
+		public Fire (o : object, e : NewsEventArgs) : void
+		{
+			NewsEvent (o, e);
+		}
+		public FileNew : string {
+			get { "/tmp/" + Name + "-new" }
+		}
+		public FileOld : string {
+			get { "/tmp"/ + Name + "-old" }
+		}
+	}
+	public class RssNewsAggregator : NewsAggregator {
+		public this (name : string, url : string) {
+			base (name, url);
+		}
+		protected override ParseNews (file : string) : list [News]
+		{
+			def xpath = XPathDocument (file);
+			def nav = xpath.CreateNavigator ();
+			def ni = nav.Select ("//*[local-name()='item']");
+			def parse (iter) {
+				if (iter.MoveNext ()) {
+					def dt = iter.Current.Select ("*[local-name()='title']");
+					def dd = iter.Current.Select ("*[local-name()='description']");
+					def dl = iter.Current.Select ("*[local-name()='link']");
+					if (dt.MoveNext () && dd.MoveNext () && dl.MoveNext ()) {
+						News (dt.Current.Value, dd.Current.Value.Trim (), dl.Current.Value) :: parse (iter);
+					} else {
+						[]
+					}
+				} else {
+					[]
+				}
+			}
+			parse (ni);
+		}
+		protected override CollectNews () : void
+		{
+			def ns = ParseNews (this.FileOld);
+			def ns2 = ParseNews (this.FileNew);
+			def last = ns.Head;
+			def nth (u, l) {
+				match (l) {
+					| x::xs when u.Title != x.Title => 1 + nth (u, xs)
+					| _ => 0
+				}
+			}
+			def diff = ns2.FirstN (nth (last, ns2));
+			when (!diff.IsEmpty)
+				Fire (this, NewsEventArgs (this.Name, diff.ToArray ()));
+		}
+	}
+	/*
+	public module T {
+		public Main () : void
+		{
+			def ag = RssNewsAggregator ("dsa", "http://localhost/~kanru/rss/dsa.xml");
+			ag.NewsEvent += NewsEventHandler (fun (_o, e) {
+						foreach (news in e.Headlines) {
+							Console.WriteLine ("{0} - {1} {2} {3}", e.Name, news.Title, news.Description, news.Link);
+						}
+					}
+					);
+			ag.Start ();
+		}
+	}
+	*/
+}
