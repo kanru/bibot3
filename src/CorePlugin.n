@@ -10,6 +10,7 @@ namespace Bibot.Plugins {
 			when (addr == "irc.freenode.net") {
 				def con = Bibot.Core.Instance;
 				con.Join (addr, "#bibot");
+				con.Join (addr, "#dot");
 				con.PerformAction ("msg", addr, "NickServ", "identify ji3cp4");
 			}
 		}

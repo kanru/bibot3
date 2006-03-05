@@ -12,7 +12,7 @@ namespace Bibot.Plugins {
 		public OnPublic (m : Message) : void
 		{
 			unless (m.Stop) {
-				when (m.Addressing == "" || m.Addressing == "bibot3") {
+				when (m.Addressing == "bibot3") {
 					def con = Bibot.Core.Instance;
 					con.PerformAction ("msg", m.Server, m.Source, $"$(m.Nick): $(m.Content)");
 				}

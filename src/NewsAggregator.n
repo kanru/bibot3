@@ -67,7 +67,7 @@ namespace Bibot {
 			get { "/tmp/" + Name + "-new" }
 		}
 		public FileOld : string {
-			get { "/tmp"/ + Name + "-old" }
+			get { "/tmp/" + Name + "-old" }
 		}
 	}
 	public class RssNewsAggregator : NewsAggregator {
