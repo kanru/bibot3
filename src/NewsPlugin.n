@@ -1,0 +1,33 @@
+using System;
+using Bibot;
+namespace Bibot.Plugins {
+	public class NewsPlugin : IPlugin {
+		rss : RssNewsAggregator = RssNewsAggregator("DSA", "http://www.debian.org/security/dsa");
+		public Setup () : void
+		{
+			rss.NewsEvent += NewsEventHandler (PostNews);
+			rss.Start ();
+		}
+		public OnRegistered (addr : string) : void
+		{
+		}
+		public OnPublic (_ : Message) : void
+		{
+		}
+		public OnPrivate (m : Message) : void
+		{
+		}
+		public Unplug () : void
+		{
+		}
+		public PostNews (_o : object, e : NewsEventArgs) : void
+		{
+			def con = Bibot.Core.Instance;
+			foreach (news in e.Headlines) {
+				def str = String.Format("{0} - {1} {2}", e.Name, news.Title, news.Description, news.Link);
+				con.PerformAction ("msg", "irc.freenode.net", "#dot", str);
+				//con.PerformAction ("msg", "irc.freenode.net", "#debian-zh", str);
+			}
+		}
+	}
+}
